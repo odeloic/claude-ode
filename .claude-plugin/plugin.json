@@ -1,0 +1,11 @@
+{
+  "name": "claude-ode",
+  "description": "Loic's personal Claude Code toolkit — commit workflows, Linear integration, React Native scaffolding, Figma-to-code, and guided implementation plans",
+  "version": "1.0.0",
+  "author": {
+    "name": "Loic Ishimwe",
+    "url": "https://github.com/odeloic"
+  },
+  "repository": "https://github.com/odeloic/claude-ode",
+  "license": "MIT"
+}

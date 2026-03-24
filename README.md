@@ -31,7 +31,8 @@ Or add to your Claude Code settings:
 
 | Skill | Description |
 |-------|-------------|
-| `/claude-ode:showme` | Generate a guided step-by-step implementation plan (advisory only — doesn't write code) |
+| `/claude-ode:guide` | Generate a visual HTML learning guide with mental models, resources, and investigative steps — opens in browser |
+| `/claude-ode:showme` | Generate a visual HTML step-by-step implementation tutorial with diff-highlighted code — opens in browser |
 | `/claude-ode:figma-design` | Extract a Figma design via MCP and implement it as production-grade frontend code |
 
 ## License

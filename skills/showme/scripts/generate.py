@@ -393,15 +393,25 @@ a:hover { text-decoration: underline; }
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: python generate.py '<json-data>'", file=sys.stderr)
+    if len(sys.argv) >= 2:
+        # JSON passed as argument (simple payloads)
+        raw = sys.argv[1]
+    elif not sys.stdin.isatty():
+        # JSON piped via stdin (handles multiline content cleanly)
+        raw = sys.stdin.read()
+    else:
+        print(
+            "Usage: python generate.py '<json-data>'\n"
+            "   or: echo '<json-data>' | python generate.py",
+            file=sys.stderr,
+        )
         print(
             "\nExpected JSON with: title, summary, files, steps, verification",
             file=sys.stderr,
         )
         sys.exit(1)
 
-    data = json.loads(sys.argv[1])
+    data = json.loads(raw)
     html = generate_html(data)
 
     out = Path(f"/tmp/showme-{int(datetime.now().timestamp())}.html")

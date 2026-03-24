@@ -3,7 +3,7 @@ name: guide
 description: Generate a visual HTML learning guide that helps the user understand a concept or solve a problem. Opens an interactive page in the browser with mental models, flow diagrams, codebase pointers, and diagnostic questions.
 argument-hint: <what to understand or figure out>
 user-invocable: true
-allowed-tools: Bash(python *)
+allowed-tools: Bash(python3 *), Bash(python *)
 metadata:
   author: loicishimwe
   version: "2.0.0"
@@ -22,11 +22,15 @@ Generate an interactive HTML learning guide and open it in the browser.
 
 ## Running the script
 
+Pass JSON via a heredoc to stdin in a **single** `python3` command. This avoids shell escaping issues with multiline strings and matches the `allowed-tools` pattern for auto-approval.
+
 ```bash
-python ${CLAUDE_SKILL_DIR}/scripts/generate.py '<json-data>'
+python3 ${CLAUDE_SKILL_DIR}/scripts/generate.py <<'GUIDE_EOF'
+<json-data>
+GUIDE_EOF
 ```
 
-The script generates a self-contained HTML file in `/tmp/` and opens it in the browser.
+The script accepts JSON from stdin or as a CLI argument. It generates a self-contained HTML file in `/tmp/` and opens it in the browser.
 
 ## JSON schema
 

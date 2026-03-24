@@ -3,7 +3,7 @@ name: showme
 description: Generate a visual HTML step-by-step implementation tutorial with diff-highlighted code. Opens an interactive page in the browser showing exactly what to change and where.
 argument-hint: <what to implement>
 user-invocable: true
-allowed-tools: Bash(python *)
+allowed-tools: Bash(python3 *), Bash(python *)
 metadata:
   author: loicishimwe
   version: "2.0.0"
@@ -22,11 +22,15 @@ Generate an interactive HTML tutorial with step-by-step implementation instructi
 
 ## Running the script
 
+Pass JSON via a heredoc to stdin in a **single** `python3` command. This avoids shell escaping issues with multiline strings and matches the `allowed-tools` pattern for auto-approval.
+
 ```bash
-python ${CLAUDE_SKILL_DIR}/scripts/generate.py '<json-data>'
+python3 ${CLAUDE_SKILL_DIR}/scripts/generate.py <<'SHOWME_EOF'
+<json-data>
+SHOWME_EOF
 ```
 
-The script generates a self-contained HTML file in `/tmp/` and opens it in the browser.
+The script accepts JSON from stdin or as a CLI argument. It generates a self-contained HTML file in `/tmp/` and opens it in the browser.
 
 ## JSON schema
 

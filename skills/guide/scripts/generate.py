@@ -1,0 +1,367 @@
+#!/usr/bin/env python3
+"""Generate an interactive HTML learning guide and open it in the browser."""
+
+import json
+import sys
+import webbrowser
+from pathlib import Path
+from datetime import datetime
+
+
+def generate_html(data: dict) -> str:
+    title = data.get("title", "Learning Guide")
+    summary = data.get("summary", "")
+    mental_model = data.get("mental_model", {})
+    where_to_look = data.get("where_to_look", {})
+    questions = data.get("questions", [])
+    experiment = data.get("experiment", {})
+    when_ready = data.get("when_ready", "")
+    flow_steps = data.get("flow_steps", [])
+    callouts = data.get("callouts", [])
+
+    # Build flow diagram HTML
+    flow_html = ""
+    if flow_steps:
+        arrows = []
+        for i, step in enumerate(flow_steps):
+            arrows.append(f'<span class="flow-step">{_esc(step)}</span>')
+            if i < len(flow_steps) - 1:
+                arrows.append('<span class="flow-arrow">\u2192</span>')
+        flow_html = f'<div class="flow">{"".join(arrows)}</div>'
+
+    # Build mental model section
+    mm_html = ""
+    if mental_model:
+        explanation = mental_model.get("explanation", "")
+        misconceptions = mental_model.get("misconceptions", [])
+        code_example = mental_model.get("code_example", "")
+        mm_parts = [f"<p>{_esc(explanation)}</p>"]
+        if flow_html:
+            mm_parts.append(flow_html)
+        if code_example:
+            mm_parts.append(f'<pre><code>{_esc(code_example)}</code></pre>')
+        if misconceptions:
+            for m in misconceptions:
+                mm_parts.append(
+                    f'<div class="callout warning">'
+                    f'<span class="callout-icon">\u26a0\ufe0f</span>'
+                    f"<span>{_esc(m)}</span></div>"
+                )
+        mm_html = _section("\U0001f9e0", "purple", "Mental Model", "\n".join(mm_parts))
+
+    # Build where to look section
+    wtl_html = ""
+    if where_to_look:
+        parts = []
+        codebase = where_to_look.get("codebase", [])
+        docs = where_to_look.get("docs", [])
+        tooling = where_to_look.get("tooling", [])
+        if codebase:
+            parts.append("<h3>In your codebase</h3>")
+            parts.append("<ul>")
+            for item in codebase:
+                parts.append(f"<li>{_esc_rich(item)}</li>")
+            parts.append("</ul>")
+        if docs:
+            parts.append("<h3>In the docs</h3>")
+            parts.append("<ul>")
+            for item in docs:
+                if isinstance(item, dict):
+                    url = item.get("url", "")
+                    text = item.get("text", url)
+                    parts.append(
+                        f'<li><a href="{_esc(url)}" target="_blank">{_esc(text)}</a></li>'
+                    )
+                else:
+                    parts.append(f"<li>{_esc_rich(item)}</li>")
+            parts.append("</ul>")
+        if tooling:
+            parts.append("<h3>In the tooling</h3>")
+            parts.append("<ul>")
+            for item in tooling:
+                parts.append(f"<li>{_esc_rich(item)}</li>")
+            parts.append("</ul>")
+        wtl_html = _section(
+            "\U0001f50d", "green", "Where to Look", "\n".join(parts)
+        )
+
+    # Build questions section
+    q_html = ""
+    if questions:
+        items = "".join(f"<li>{_esc_rich(q)}</li>" for q in questions)
+        q_html = _section(
+            "\U0001f914", "yellow", "Key Questions to Ask Yourself", f"<ol>{items}</ol>"
+        )
+
+    # Build experiment section
+    exp_html = ""
+    if experiment:
+        desc = experiment.get("description", "")
+        command = experiment.get("command", "")
+        parts = [f"<p>{_esc(desc)}</p>"]
+        if command:
+            parts.append(f'<pre><code>{_esc(command)}</code></pre>')
+        exp_html = _section("\U0001f9ea", "red", "Try This", "\n".join(parts))
+
+    # Build when ready section
+    wr_html = ""
+    if when_ready:
+        wr_html = _section(
+            "\u2705", "purple", "When You're Ready", f"<p>{_esc(when_ready)}</p>"
+        )
+
+    # Build callouts
+    callout_html = ""
+    for c in callouts:
+        ctype = c.get("type", "tip")
+        icon = {"tip": "\U0001f4a1", "warning": "\u26a0\ufe0f", "danger": "\U0001f6a8"}.get(
+            ctype, "\U0001f4a1"
+        )
+        callout_html += (
+            f'<div class="callout {_esc(ctype)}">'
+            f'<span class="callout-icon">{icon}</span>'
+            f'<span>{_esc(c.get("text", ""))}</span></div>'
+        )
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Guide: {_esc(title)}</title>
+  <style>{CSS}</style>
+</head>
+<body>
+  <div class="header">
+    <div class="badge">Learning Guide</div>
+    <h1>{_esc(title)}</h1>
+    <p>{_esc(summary)}</p>
+  </div>
+  {mm_html}
+  {wtl_html}
+  {q_html}
+  {exp_html}
+  {wr_html}
+  {callout_html}
+  <div class="footer">Generated by /guide &mdash; claude-ode &mdash; {datetime.now().strftime("%Y-%m-%d %H:%M")}</div>
+</body>
+</html>"""
+
+
+def _esc(text: str) -> str:
+    """Escape HTML special characters."""
+    return (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+
+
+def _esc_rich(text: str) -> str:
+    """Escape HTML but preserve inline code backticks as <code> tags."""
+    escaped = _esc(text)
+    # Convert `code` to <code>code</code>
+    import re
+
+    return re.sub(r"`([^`]+)`", r"<code>\1</code>", escaped)
+
+
+def _section(icon: str, color: str, title: str, content: str) -> str:
+    return f"""<div class="section">
+    <div class="section-icon {color}">{icon}</div>
+    <h2>{_esc(title)}</h2>
+    {content}
+  </div>"""
+
+
+CSS = """
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --border: #2a2e3a;
+  --text: #e4e4e7;
+  --text-muted: #9ca3af;
+  --accent: #818cf8;
+  --accent-dim: rgba(129, 140, 248, 0.12);
+  --success: #34d399;
+  --success-dim: rgba(52, 211, 153, 0.12);
+  --warning: #fbbf24;
+  --warning-dim: rgba(251, 191, 36, 0.12);
+  --danger: #f87171;
+  --danger-dim: rgba(248, 113, 113, 0.12);
+  --code-bg: #141620;
+  --radius: 12px;
+  --font-mono: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+  padding: 2rem;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.header {
+  position: relative;
+  padding: 2.5rem 2rem 2rem;
+  margin-bottom: 2rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.header::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--accent), #c084fc, var(--accent));
+}
+.header .badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+  background: var(--accent-dim);
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  margin-bottom: 1rem;
+}
+.header h1 { font-size: 1.75rem; font-weight: 700; line-height: 1.3; margin-bottom: 0.5rem; }
+.header p { color: var(--text-muted); font-size: 0.95rem; }
+
+.section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.75rem 2rem;
+  margin-bottom: 1.25rem;
+  transition: border-color 0.2s;
+}
+.section:hover { border-color: var(--accent); }
+
+.section-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  font-size: 1.1rem;
+  margin-bottom: 0.75rem;
+}
+.section-icon.purple { background: var(--accent-dim); }
+.section-icon.green { background: var(--success-dim); }
+.section-icon.yellow { background: var(--warning-dim); }
+.section-icon.red { background: var(--danger-dim); }
+
+.section h2 { font-size: 1.15rem; font-weight: 600; margin-bottom: 0.75rem; }
+.section h3 { font-size: 0.95rem; font-weight: 600; margin: 1rem 0 0.5rem; color: var(--text); }
+.section p, .section li { color: var(--text-muted); font-size: 0.9rem; line-height: 1.75; }
+.section ul, .section ol { padding-left: 1.25rem; margin-top: 0.5rem; }
+.section li { margin-bottom: 0.4rem; }
+.section li strong { color: var(--text); }
+
+pre {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+  margin: 0.75rem 0;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  line-height: 1.7;
+  color: var(--text-muted);
+}
+code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  background: var(--code-bg);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  color: var(--accent);
+}
+pre code { background: none; padding: 0; color: inherit; }
+
+.callout {
+  display: flex;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  border-radius: 8px;
+  margin: 0.75rem 0;
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+.callout.tip { background: var(--success-dim); border-left: 3px solid var(--success); }
+.callout.warning { background: var(--warning-dim); border-left: 3px solid var(--warning); }
+.callout.danger { background: var(--danger-dim); border-left: 3px solid var(--danger); }
+.callout-icon { flex-shrink: 0; font-size: 1.1rem; }
+
+.flow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin: 1rem 0;
+}
+.flow-step {
+  background: var(--accent-dim);
+  color: var(--accent);
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.flow-arrow { color: var(--text-muted); font-size: 0.8rem; }
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.footer {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+"""
+
+
+if __name__ == "__main__":
+    if len(sys.argv) >= 2:
+        # JSON passed as argument (simple payloads)
+        raw = sys.argv[1]
+    elif not sys.stdin.isatty():
+        # JSON piped via stdin (handles multiline content cleanly)
+        raw = sys.stdin.read()
+    else:
+        print(
+            "Usage: python generate.py '<json-data>'\n"
+            "   or: echo '<json-data>' | python generate.py",
+            file=sys.stderr,
+        )
+        print(
+            "\nExpected JSON with: title, summary, mental_model, where_to_look, "
+            "questions, experiment, when_ready, flow_steps, callouts",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    data = json.loads(raw)
+    html = generate_html(data)
+
+    out = Path(f"/tmp/guide-{int(datetime.now().timestamp())}.html")
+    out.write_text(html)
+    print(f"Guide generated: {out}")
+    webbrowser.open(f"file://{out}")

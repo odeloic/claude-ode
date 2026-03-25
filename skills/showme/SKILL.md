@@ -1,53 +1,82 @@
 ---
 name: showme
-description: Generate a guided technical implementation plan for a code change the user wants to implement themselves. Use when the user wants to understand how to implement something hands-on rather than having code written for them.
+description: Generate a visual HTML step-by-step implementation tutorial with diff-highlighted code. Opens an interactive page in the browser showing exactly what to change and where.
 argument-hint: <what to implement>
 user-invocable: true
+allowed-tools: Bash(python3 *), Bash(python *)
 metadata:
   author: loicishimwe
-  version: "1.0.0"
+  version: "2.0.0"
 ---
 
-# Show Me — Guided Technical Implementation
+# Show Me — Visual Implementation Tutorial
 
-Generate a clear, step-by-step technical implementation guide so the user can write the code themselves.
+Generate an interactive HTML tutorial with step-by-step implementation instructions and open it in the browser.
 
-## How It Works
+## Workflow
 
-1. **Understand the request**: Parse the user's prompt to understand what they want to implement.
-2. **Research the codebase**: Read relevant files to understand the current state — architecture, patterns, conventions, and dependencies.
-3. **Produce the guide**: Output a structured implementation walkthrough.
+1. **Understand the request**: Parse what the user wants to implement.
+2. **Research the codebase**: Read relevant files to understand architecture, patterns, conventions, and dependencies. Never guess at file contents or line numbers.
+3. **Build the JSON data**: Assemble a JSON object with all tutorial steps (see schema below).
+4. **Run the script**: Pass the JSON to the bundled generator script.
 
-## Output Format
+## Running the script
 
-For each step in the implementation, provide:
+Pass JSON via a heredoc to stdin in a **single** `python3` command. This avoids shell escaping issues with multiline strings and matches the `allowed-tools` pattern for auto-approval.
 
-### Step N: [Brief title]
-
-**File:** `path/to/file.py` (new file | edit existing)
-**Location:** Line XX / after function `foo()` / inside class `Bar` / end of file
-
-**What to do:** Brief explanation of the change and why.
-
-**Code to write:**
-```language
-// The exact code the user should add or modify
+```bash
+python3 ${CLAUDE_SKILL_DIR}/scripts/generate.py <<'SHOWME_EOF'
+<json-data>
+SHOWME_EOF
 ```
 
-**Key details:**
-- Any imports needed
-- Gotchas or edge cases to watch for
-- How this connects to the next step
+The script accepts JSON from stdin or as a CLI argument. It generates a self-contained HTML file in `/tmp/` and opens it in the browser.
 
----
+## JSON schema
 
-## Guidelines
+```json
+{
+  "title": "What we're building",
+  "summary": "Brief description of the implementation and why",
+  "files": ["path/to/file1.ts", "path/to/file2.ts"],
+  "steps": [
+    {
+      "title": "Step title",
+      "file": "path/to/file.ts",
+      "location": "Line XX · after function foo() · edit existing",
+      "description": "What to do and why",
+      "code": "The exact code to add or modify",
+      "lang": "typescript",
+      "diff": [
+        {"type": "context", "text": "existing surrounding code"},
+        {"type": "add", "text": "new code to add"},
+        {"type": "remove", "text": "old code to remove"},
+        {"type": "context", "text": "existing surrounding code"}
+      ],
+      "notes": [
+        {"type": "tip", "text": "Import needed or gotcha to watch for"},
+        {"type": "warning", "text": "Edge case to handle"}
+      ]
+    }
+  ],
+  "verification": {
+    "description": "How to test that the implementation works",
+    "steps": ["Run the test suite", "Check the output"],
+    "command": "npm test"
+  }
+}
+```
+
+For each step, use either `code` (plain code block) or `diff` (diff-style with add/remove/context lines). Prefer `diff` when modifying existing code — it shows exactly what changes.
+
+## Content guidelines
 
 - ALWAYS read the relevant files first — never guess at file contents, line numbers, or existing code.
-- Be precise about WHERE code goes: reference line numbers, surrounding functions, class names, or other anchors the user can search for.
-- Show the minimal diff — only the code that needs to change, with enough surrounding context (2-3 lines) so the user can locate the insertion point.
+- Be precise about WHERE code goes: reference line numbers, surrounding functions, class names, or other anchors.
+- Show the minimal diff — only the code that needs to change, with enough surrounding context (2-3 lines).
 - Respect existing patterns: match the project's naming conventions, import style, error handling, and structure.
 - Order steps logically — dependencies first (e.g., models before services, services before routes).
-- After all steps, include a **Verification** section: how to test/run/check that the implementation works.
+- Always include a `verification` section with concrete test commands or checks.
 - Keep explanations concise but don't skip the "why" — the user is learning by doing.
-- Do NOT write the code for the user using Edit/Write tools. This skill is advisory only.
+- List all files that will be touched in the top-level `files` array for a quick overview.
+- Do NOT write the code for the user using Edit/Write tools. This skill generates a visual tutorial only.

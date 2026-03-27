@@ -1,0 +1,13 @@
+{
+  "name": "claude-ode",
+  "owner": {
+    "name": "Loic Ishimwe"
+  },
+  "plugins": [
+    {
+      "name": "claude-ode",
+      "source": "./",
+      "description": "Loic's personal Claude Code toolkit — commit workflows, Linear integration, React Native scaffolding, Figma-to-code, and guided implementation plans"
+    }
+  ]
+}

@@ -4,16 +4,17 @@ Loic's personal Claude Code plugin — commit workflows, Linear integration, Rea
 
 ## Install
 
-```bash
-claude --plugin-dir ~/workspace/ai/claude-ode
+```shell
+/plugin marketplace add odeloic/claude-ode
+/plugin install claude-ode@claude-ode
 ```
 
-Or add to your Claude Code settings:
+Then run `/reload-plugins` to activate.
 
-```json
-{
-  "plugins": ["~/workspace/ai/claude-ode"]
-}
+**Local development** — load without installing:
+
+```bash
+claude --plugin-dir ~/workspace/ai/claude-ode
 ```
 
 ## Commands
